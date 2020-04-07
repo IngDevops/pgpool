@@ -1,28 +1,51 @@
 #!/bin/bash
- 
-if [ $# -ne 5 ]
+if [ $# -ne 3 ]
 then
-    echo "failover falling_node oldprimary_node new_primary replication_password trigger_file"
+    echo "recovery_1st_stage datadir remote_host remote_datadir"
     exit 1
 fi
  
-FALLING_NODE=$1         # %d
-OLDPRIMARY_NODE=$2      # %P
-NEW_PRIMARY=$3          # %H
-REPL_PASS=$4
-TRIGGER_FILE=$5
+PGDATA=$1
+REMOTE_HOST=$2
+REMOTE_PGDATA=$3
  
-echo "failover.sh FALLING_NODE: ${FALLING_NODE}; OLDPRIMARY_NODE: ${OLDPRIMARY_NODE}; NEW_PRIMARY: ${NEW_PRIMARY}; at $(date)\n" >> /var/lib/pgsql/11/data/replscripts/exec.log
+PORT=5433
  
-if [ $FALLING_NODE = $OLDPRIMARY_NODE ]; then
-    if [ $UID -eq 0 ]
-    then
-        sudo -u postgres ssh -T postgres@$NEW_PRIMARY /var/lib/pgsql/11/data/replscripts/promote.sh -f -p $REPL_PASS -d $OLDPRIMARY_NODE
-    else
-        ssh -T postgres@$NEW_PRIMARY /var/lib/pgsql/11/data/replscripts/promote.sh -f -p $REPL_PASS -d $OLDPRIMARY_NODE
-    fi
-    exit 0;
-fi;
+echo "recovery_1st_stage.sh - PGDATA: ${PGDATA}; REMOTE_HOST: ${REMOTE_HOST}; REMOTE_PGDATA: ${REMOTE_PGDATA}; at $(date)\n" >> /var/lib/pgsql/11/data/replscripts/exec.log
+ 
+hostnamelower=$(echo "$HOSTNAME" | tr '[:upper:]' '[:lower:]')
+remotelower=$(echo "$REMOTE_HOST" | tr '[:upper:]' '[:lower:]')
+ 
+if [ "$hostnamelower" = "$remotelower" ]; then
+	echo "Cannot recover myself."
+	exit 1
+fi
+ 
+echo "Checking if primary info file exists..."
+if [ ! -f /var/lib/pgsql/11/data/primary_info ]; then
+	echo "Primary info file not found."
+	exit 1
+fi
+ 
+echo "Reading additional data from primary info file..."
+source /var/lib/pgsql/11/data/primary_info
+ 
+if [ ! -e $TRIGGER_FILE ]; then
+	echo "Trigger file not found."
+	exit 1
+fi
+ 
+if [ -e $STANDBY_FILE ]; then
+	echo "Standby file found."
+	exit 1
+fi
+ 
+if [ $UID -eq 0 ]
+then
+	sudo -u postgres ssh -T postgres@$REMOTE_HOST /var/lib/pgsql/11/data/replscripts/initiate_replication.sh -f -t $TRIGGER_FILE -s $STANDBY_FILE -H $HOSTNAME -P $PORT -u $REPL_USER -p $REPL_PASSWORD
+else
+	ssh -T postgres@$REMOTE_HOST /var/lib/pgsql/11/data/replscripts/initiate_replication.sh -f -t $TRIGGER_FILE -s $STANDBY_FILE -H $HOSTNAME -P $PORT -u $REPL_USER -p $REPL_PASSWORD
+fi
  
 exit 0;
 
