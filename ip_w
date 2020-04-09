@@ -3,11 +3,11 @@
  
 if [ $UID -eq 0 ]
 then
-        #echo "Executing: /bin/ip $@"
-        /bin/ip $@
+        #echo ruta correcta en centos "Executing: /sbin/ip $@"
+        /sbin/ip $@
 else
-        #echo "Executing: sudo /bin/ip $@"
-        sudo /bin/ip $@
+        #echo "Executing: sudo /sbin/ip $@"
+         /sbin/ip $@
 fi
  
 exit 0
